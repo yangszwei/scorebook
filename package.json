@@ -11,6 +11,8 @@
 		"typecheck": "react-router typegen && tsc"
 	},
 	"dependencies": {
+		"@iconify-icons/mdi": "^1.2.48",
+		"@iconify/react": "^6.0.2",
 		"@react-router/node": "^7.9.2",
 		"isbot": "^5.1.31",
 		"nanoid": "^5.1.6",
