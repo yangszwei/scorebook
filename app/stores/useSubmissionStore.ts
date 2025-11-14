@@ -38,6 +38,12 @@ export interface SubmissionState {
 	 * are updated.
 	 */
 	resyncScores: (assignmentId: string, calcFn: (submission: Submission) => number) => void;
+
+	/** Update a student’s name. */
+	updateStudentName: (submissionId: string, name: string) => void;
+
+	/** Update a student’s ID. */
+	updateStudentId: (submissionId: string, id: string) => void;
 }
 
 /**
@@ -108,6 +114,20 @@ export const useSubmissionStore = create<SubmissionState>()(
 			resyncScores: (assignmentId, calcFn) =>
 				set((state) => ({
 					submissions: state.submissions.map((s) => (s.assignmentId === assignmentId ? { ...s, score: calcFn(s) } : s)),
+				})),
+
+			updateStudentName: (submissionId, name) =>
+				set((state) => ({
+					submissions: state.submissions.map((s) =>
+						s.id === submissionId ? { ...s, student: { ...s.student, name } } : s,
+					),
+				})),
+
+			updateStudentId: (submissionId, id) =>
+				set((state) => ({
+					submissions: state.submissions.map((s) =>
+						s.id === submissionId ? { ...s, student: { ...s.student, id } } : s,
+					),
 				})),
 		}),
 		{ name: 'scorebook.submissions' },
