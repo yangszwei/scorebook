@@ -10,8 +10,17 @@ export default function Grade() {
 	const { assignmentId } = useParams<{ assignmentId: string }>();
 	const navigate = useNavigate();
 
-	const { assignments, addQuestion, updateQuestion, removeQuestion, addComment, updateComment, removeComment } =
-		useAssignmentStore();
+	const {
+		assignments,
+		addAssignment,
+		updateAssignment,
+		addQuestion,
+		updateQuestion,
+		removeQuestion,
+		addComment,
+		updateComment,
+		removeComment,
+	} = useAssignmentStore();
 
 	const { submissions, upsertSubmission, removeSubmission, updateSelectionForQuestion, updateScore } =
 		useSubmissionStore();
@@ -99,6 +108,24 @@ export default function Grade() {
 					const next = checked ? [...new Set([...current, cid])] : current.filter((id) => id !== cid);
 
 					updateSelectionForQuestion(activeSubmission.id, qid, next);
+				}}
+				onImport={(data) => {
+					// Check if assignment exists
+					const exists = assignments.some((a) => a.id === data.id);
+					if (exists) {
+						if (confirm(`確定要覆蓋現有的 "${data.title}" 嗎？\n這將會更新現有的作業設定。`)) {
+							updateAssignment(data.id, data);
+						} else {
+							return;
+						}
+					} else {
+						addAssignment(data);
+					}
+
+					// Navigate to it (in case ID is different or it's new)
+					if (data.id !== assignmentId) {
+						navigate(`/grade/${data.id}`);
+					}
 				}}
 			/>
 
