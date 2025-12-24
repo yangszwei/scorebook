@@ -1,11 +1,7 @@
 import QuestionCard from './QuestionCard';
-import downloadIcon from '@iconify-icons/mdi/download';
-import homeIcon from '@iconify-icons/mdi/home';
-import addIcon from '@iconify-icons/mdi/plus';
 import uploadIcon from '@iconify-icons/mdi/upload';
 import { Icon } from '@iconify/react';
 import type { FC } from 'react';
-import { useNavigate } from 'react-router';
 import type { Assignment, Submission, Comment } from '~/models';
 
 export interface AssignmentPanelProps {
@@ -42,20 +38,7 @@ const AssignmentPanel: FC<AssignmentPanelProps> = ({
 
 	onImport,
 }) => {
-	const navigate = useNavigate();
-
 	const questions = assignment.questions;
-
-	const handleExport = () => {
-		const data = JSON.stringify(assignment, null, 2);
-		const blob = new Blob([data], { type: 'application/json' });
-		const url = URL.createObjectURL(blob);
-		const a = document.createElement('a');
-		a.href = url;
-		a.download = `${assignment.title}.json`;
-		a.click();
-		URL.revokeObjectURL(url);
-	};
 
 	const handleImport = (e: React.ChangeEvent<HTMLInputElement>) => {
 		const file = e.target.files?.[0];
@@ -108,47 +91,6 @@ const AssignmentPanel: FC<AssignmentPanelProps> = ({
 							</label>
 						</div>
 					</div>
-				</div>
-			)}
-
-			{/* Toolbar */}
-			{questions.length > 0 && (
-				<div className="mb-6 flex items-center gap-3 rounded-md border border-gray-200 bg-white px-3 py-2 shadow-sm">
-					<button
-						onClick={onAddQuestion}
-						className="flex cursor-pointer items-center gap-1 p-1 text-blue-600 hover:text-blue-700"
-					>
-						<Icon icon={addIcon} className="text-lg" />
-						新增題目
-					</button>
-
-					<div className="mx-2 h-4 w-px bg-gray-300"></div>
-
-					<button
-						onClick={handleExport}
-						className="flex cursor-pointer items-center gap-1 p-1 text-gray-600 hover:text-gray-900"
-						title="匯出為 JSON"
-					>
-						<Icon icon={downloadIcon} className="text-lg" />
-						匯出
-					</button>
-
-					<label
-						className="flex cursor-pointer items-center gap-1 p-1 text-gray-600 hover:text-gray-900"
-						title="從 JSON 匯入"
-					>
-						<Icon icon={uploadIcon} className="text-lg" />
-						匯入
-						<input type="file" accept=".json" onChange={handleImport} className="hidden" />
-					</label>
-
-					<button
-						onClick={() => navigate('/')}
-						className="mr-0 ml-auto flex cursor-pointer items-center gap-1 p-1 text-gray-600 hover:text-gray-700"
-					>
-						<Icon icon={homeIcon} className="text-lg" />
-						返回首頁
-					</button>
 				</div>
 			)}
 

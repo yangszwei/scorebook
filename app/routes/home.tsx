@@ -1,13 +1,18 @@
+import downloadIcon from '@iconify-icons/mdi/download';
 import pencilIcon from '@iconify-icons/mdi/pencil-outline';
 import plusIcon from '@iconify-icons/mdi/plus';
+import tableIcon from '@iconify-icons/mdi/table-arrow-right';
 import trashIcon from '@iconify-icons/mdi/trash-can-outline';
 import { Icon } from '@iconify/react';
 import { useState } from 'react';
 import { Link } from 'react-router';
 import { useAssignmentStore } from '~/stores/useAssignmentStore';
+import { useSubmissionStore } from '~/stores/useSubmissionStore';
+import { exportBackupJSON, exportGradesToCSV } from '~/utils/export';
 
 export default function Home() {
 	const { assignments, addAssignment, removeAssignment, updateAssignment } = useAssignmentStore();
+	const { submissions } = useSubmissionStore();
 
 	const [editingId, setEditingId] = useState<string | null>(null);
 	const [editingValue, setEditingValue] = useState('');
@@ -36,6 +41,16 @@ export default function Home() {
 		});
 	};
 
+	const handleExportAll = () => {
+		exportBackupJSON(assignments, submissions);
+	};
+
+	const handleExportGrades = (assignmentId: string) => {
+		const assignment = assignments.find((a) => a.id === assignmentId);
+		if (!assignment) return;
+		exportGradesToCSV(assignment, submissions);
+	};
+
 	return (
 		<main className="min-h-screen bg-gray-50 p-8">
 			<div className="mx-auto max-w-4xl space-y-8">
@@ -43,13 +58,23 @@ export default function Home() {
 				<header className="flex items-center justify-between">
 					<h1 className="text-2xl font-semibold text-gray-900">作業列表</h1>
 
-					<button
-						onClick={handleCreate}
-						className="flex items-center gap-1 rounded-lg bg-blue-600 px-4 py-2 text-white shadow hover:bg-blue-700"
-					>
-						<Icon icon={plusIcon} className="text-lg" />
-						新增作業
-					</button>
+					<div className="flex gap-2">
+						<button
+							onClick={handleExportAll}
+							className="flex items-center gap-1 rounded-lg border border-gray-300 bg-white px-4 py-2 text-gray-700 shadow-sm hover:bg-gray-50"
+						>
+							<Icon icon={downloadIcon} className="text-lg" />
+							備份資料
+						</button>
+
+						<button
+							onClick={handleCreate}
+							className="flex items-center gap-1 rounded-lg bg-blue-600 px-4 py-2 text-white shadow hover:bg-blue-700"
+						>
+							<Icon icon={plusIcon} className="text-lg" />
+							新增作業
+						</button>
+					</div>
 				</header>
 
 				{/* Assignment list */}
@@ -108,17 +133,28 @@ export default function Home() {
 									<p className="mt-1 text-sm text-gray-400">共 {a.questions.length} 題</p>
 								</div>
 
-								{/* Delete */}
-								<button
-									onClick={() => {
-										if (window.confirm('確定要刪除此作業？此動作無法復原！')) {
-											removeAssignment(a.id);
-										}
-									}}
-									className="ml-4 shrink-0 p-2 text-red-500 hover:text-red-600"
-								>
-									<Icon icon={trashIcon} className="text-xl" />
-								</button>
+								<div className="flex items-center">
+									<button
+										onClick={() => handleExportGrades(a.id)}
+										className="mr-2 flex w-max items-center gap-1 rounded px-2 py-1 text-sm whitespace-nowrap text-green-600 hover:bg-green-50"
+										title="匯出成績"
+									>
+										<Icon icon={tableIcon} className="text-lg" />
+										匯出成績
+									</button>
+
+									{/* Delete */}
+									<button
+										onClick={() => {
+											if (window.confirm('確定要刪除此作業？此動作無法復原！')) {
+												removeAssignment(a.id);
+											}
+										}}
+										className="ml-4 shrink-0 p-2 text-red-500 hover:text-red-600"
+									>
+										<Icon icon={trashIcon} className="text-xl" />
+									</button>
+								</div>
 							</div>
 						);
 					})}

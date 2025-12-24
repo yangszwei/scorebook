@@ -1,14 +1,28 @@
+import checkIcon from '@iconify-icons/mdi/check';
+import downloadIcon from '@iconify-icons/mdi/download';
+import homeIcon from '@iconify-icons/mdi/home';
+import addIcon from '@iconify-icons/mdi/plus';
+import tableIcon from '@iconify-icons/mdi/table-arrow-right';
+import textBoxEditIcon from '@iconify-icons/mdi/text-box-edit-outline';
+import uploadIcon from '@iconify-icons/mdi/upload';
+import { Icon } from '@iconify/react';
 import { useEffect, useMemo, useState } from 'react';
-import { useParams, useNavigate } from 'react-router';
+import { Link, useParams, useNavigate } from 'react-router';
 import AssignmentPanel from '~/components/grade/AssignmentPanel';
+import MarkdownEditor from '~/components/grade/MarkdownEditor';
 import StudentPanel from '~/components/grade/StudentPanel';
 import { calculateScore } from '~/services/score';
 import { useAssignmentStore } from '~/stores/useAssignmentStore';
 import { useSubmissionStore } from '~/stores/useSubmissionStore';
+import { exportGradesToCSV } from '~/utils/export';
+import { assignmentToMarkdown, parseMarkdownToAssignment } from '~/utils/markdown';
 
 export default function Grade() {
 	const { assignmentId } = useParams<{ assignmentId: string }>();
 	const navigate = useNavigate();
+
+	const [viewMode, setViewMode] = useState<'visual' | 'markdown'>('visual');
+	const [markdownValue, setMarkdownValue] = useState('');
 
 	const {
 		assignments,
@@ -77,91 +91,208 @@ export default function Grade() {
 	}
 
 	return (
-		<main className="grid h-screen grid-cols-2 gap-6 bg-gray-50 p-6">
-			<AssignmentPanel
-				assignment={assignment}
-				submission={activeSubmission}
-				locked={locked}
-				onAddQuestion={() =>
-					addQuestion(assignment.id, {
-						id: crypto.randomUUID(),
-						title: `問題${assignment.questions.length + 1}`,
-						comments: [],
-					})
-				}
-				onRenameQuestion={(qid, title) => updateQuestion(assignment.id, qid, { title })}
-				onRemoveQuestion={(qid) => removeQuestion(assignment.id, qid)}
-				onAddComment={(qid) =>
-					addComment(assignment.id, qid, {
-						id: crypto.randomUUID(),
-						text: '',
-						deduction: 0,
-					})
-				}
-				onEditComment={(qid, cid, patch) => updateComment(assignment.id, qid, cid, patch)}
-				onRemoveComment={(qid, cid) => removeComment(assignment.id, qid, cid)}
-				onToggleComment={(qid, cid, checked) => {
-					if (!activeSubmission) return;
-					if (locked) return;
+		<main className="grid h-screen grid-cols-2 grid-rows-[auto_1fr] gap-4 bg-gray-50 p-4">
+			<header className="col-span-full flex items-center justify-between rounded-lg border border-gray-200 bg-white px-4 py-2 shadow-sm">
+				{/* Left: Authoring Tools */}
+				<div className="flex items-center gap-3">
+					{viewMode === 'visual' ? (
+						<>
+							<button
+								onClick={() =>
+									addQuestion(assignment.id, {
+										id: crypto.randomUUID(),
+										title: `問題${assignment.questions.length + 1}`,
+										comments: [],
+									})
+								}
+								className="flex items-center gap-1 rounded-md px-3 py-2 text-sm font-medium text-blue-600 hover:bg-blue-50"
+							>
+								<Icon icon={addIcon} className="text-lg" />
+								新增
+							</button>
 
-					const current = activeSubmission.selected[qid] ?? [];
-					const next = checked ? [...new Set([...current, cid])] : current.filter((id) => id !== cid);
+							<button
+								onClick={() => {
+									setMarkdownValue(assignmentToMarkdown(assignment));
+									setViewMode('markdown');
+								}}
+								className="flex items-center gap-1 rounded-md px-3 py-2 text-sm font-medium text-purple-600 hover:bg-purple-50"
+							>
+								<Icon icon={textBoxEditIcon} className="text-lg" />
+								快速編輯
+							</button>
 
-					updateSelectionForQuestion(activeSubmission.id, qid, next);
-				}}
-				onImport={(data) => {
-					// Check if assignment exists
-					const exists = assignments.some((a) => a.id === data.id);
-					if (exists) {
-						if (confirm(`確定要覆蓋現有的 "${data.title}" 嗎？\n這將會更新現有的作業設定。`)) {
-							updateAssignment(data.id, data);
-						} else {
-							return;
-						}
-					} else {
-						addAssignment(data);
+							<div className="h-5 w-px bg-gray-200"></div>
+
+							<label className="flex cursor-pointer items-center gap-1 rounded-md px-3 py-2 text-sm font-medium text-gray-600 hover:bg-gray-50">
+								<Icon icon={uploadIcon} className="text-lg" />
+								匯入JSON
+								<input
+									type="file"
+									accept=".json"
+									className="hidden"
+									onChange={(e) => {
+										const file = e.target.files?.[0];
+										if (!file) return;
+										const reader = new FileReader();
+										reader.onload = (ev) => {
+											try {
+												const json = ev.target?.result as string;
+												const parsed = JSON.parse(json);
+												if (parsed.id && parsed.title) {
+													if (confirm(`覆蓋 "${parsed.title}"？`)) {
+														updateAssignment(parsed.id, parsed);
+													} else {
+														addAssignment(parsed);
+														navigate(`/grade/${parsed.id}`);
+													}
+												}
+											} catch {
+												alert('無效檔案');
+											}
+										};
+										reader.readAsText(file);
+										e.target.value = '';
+									}}
+								/>
+							</label>
+
+							<button
+								onClick={() => {
+									const data = JSON.stringify(assignment, null, 2);
+									const blob = new Blob([data], { type: 'application/json' });
+									const url = URL.createObjectURL(blob);
+									const a = document.createElement('a');
+									a.href = url;
+									a.download = `${assignment.title}.json`;
+									a.click();
+									URL.revokeObjectURL(url);
+								}}
+								className="flex items-center gap-1 rounded-md px-3 py-2 text-sm font-medium text-gray-600 hover:bg-gray-50"
+							>
+								<Icon icon={downloadIcon} className="text-lg" />
+								匯出JSON
+							</button>
+						</>
+					) : (
+						<button
+							onClick={() => {
+								try {
+									const newAssignment = parseMarkdownToAssignment(markdownValue, assignment);
+									updateAssignment(assignment.id, newAssignment);
+									setViewMode('visual');
+								} catch {
+									alert('Markdown parsing failed');
+								}
+							}}
+							className="flex items-center gap-1 rounded-md bg-purple-600 px-3 py-2 text-sm font-bold text-white hover:bg-purple-700"
+						>
+							<Icon icon={checkIcon} className="text-lg" />
+							完成編輯
+						</button>
+					)}
+				</div>
+
+				{/* Right: Context & Reporting */}
+				<div className="flex items-center gap-4">
+					<button
+						onClick={() => exportGradesToCSV(assignment, submissions)}
+						className="flex items-center gap-1 rounded-md px-3 py-2 text-sm font-medium text-green-700 hover:bg-green-50"
+					>
+						<Icon icon={tableIcon} className="text-lg" />
+						匯出成績
+					</button>
+
+					<div className="h-5 w-px bg-gray-300"></div>
+
+					<h1 className="text-lg font-bold text-gray-900">{assignment.title}</h1>
+
+					<div className="h-5 w-px bg-gray-300"></div>
+
+					<Link
+						to="/"
+						className="flex items-center gap-1 rounded-md px-2 py-1 text-gray-500 hover:text-blue-600"
+						title="返回列表"
+					>
+						<Icon icon={homeIcon} className="text-xl" />
+					</Link>
+				</div>
+			</header>
+
+			{viewMode === 'markdown' ? (
+				<MarkdownEditor value={markdownValue} onChange={setMarkdownValue} />
+			) : (
+				<AssignmentPanel
+					assignment={assignment}
+					submission={activeSubmission}
+					locked={locked}
+					onAddQuestion={() =>
+						addQuestion(assignment.id, {
+							id: crypto.randomUUID(),
+							title: `問題${assignment.questions.length + 1}`,
+							comments: [],
+						})
 					}
-
-					// Navigate to it (in case ID is different or it's new)
-					if (data.id !== assignmentId) {
-						navigate(`/grade/${data.id}`);
+					onRenameQuestion={(qid, title) => updateQuestion(assignment.id, qid, { title })}
+					onRemoveQuestion={(qid) => removeQuestion(assignment.id, qid)}
+					onAddComment={(qid) =>
+						addComment(assignment.id, qid, {
+							id: crypto.randomUUID(),
+							text: '',
+							deduction: 0,
+						})
 					}
-				}}
-			/>
+					onEditComment={(qid, cid, patch) => updateComment(assignment.id, qid, cid, patch)}
+					onRemoveComment={(qid, cid) => removeComment(assignment.id, qid, cid)}
+					onToggleComment={(qid, cid, checked) => {
+						if (!activeSubmission) return;
+						if (locked) return;
 
-			<StudentPanel
-				assignment={assignment}
-				submissions={relatedSubmissions}
-				submission={activeSubmission}
-				locked={locked}
-				onChangeStudent={(id) => setActiveSubmissionId(id)}
-				onAddStudent={(id, name) => {
-					const s = upsertSubmission(assignment.id, {
-						id,
-						name,
-					});
-					setActiveSubmissionId(s.id);
-				}}
-				onRemoveStudent={() => {
-					if (!activeSubmission) return;
+						const current = activeSubmission.selected[qid] ?? [];
+						const next = checked ? [...new Set([...current, cid])] : current.filter((id) => id !== cid);
 
-					removeSubmission(activeSubmission.id);
+						updateSelectionForQuestion(activeSubmission.id, qid, next);
+					}}
+				/>
+			)}
 
-					// After deletion, simply clear user intent
-					// The derived activeSubmission will fallback safely
-					setActiveSubmissionId(null);
-				}}
-				onNext={() => {
-					if (idx < 0) return;
-					const next = relatedSubmissions[(idx + 1) % relatedSubmissions.length];
-					setActiveSubmissionId(next.id);
-				}}
-				onPrev={() => {
-					if (idx < 0) return;
-					const prev = relatedSubmissions[(idx - 1 + relatedSubmissions.length) % relatedSubmissions.length];
-					setActiveSubmissionId(prev.id);
-				}}
-			/>
+			<div className="relative flex h-full flex-col overflow-hidden">
+				{viewMode === 'markdown' && (
+					<div className="absolute inset-0 z-10 flex items-center justify-center rounded-xl border border-gray-200 bg-white/80 backdrop-blur-xs">
+						<p className="font-medium text-gray-500">編輯模式中無法評分</p>
+					</div>
+				)}
+				<StudentPanel
+					assignment={assignment}
+					submissions={relatedSubmissions}
+					submission={activeSubmission}
+					locked={locked || viewMode === 'markdown'}
+					onChangeStudent={(id) => setActiveSubmissionId(id)}
+					onAddStudent={(id, name) => {
+						const s = upsertSubmission(assignment.id, {
+							id,
+							name,
+						});
+						setActiveSubmissionId(s.id);
+					}}
+					onRemoveStudent={() => {
+						if (!activeSubmission) return;
+
+						removeSubmission(activeSubmission.id);
+						setActiveSubmissionId(null);
+					}}
+					onNext={() => {
+						if (idx < 0) return;
+						const next = relatedSubmissions[(idx + 1) % relatedSubmissions.length];
+						setActiveSubmissionId(next.id);
+					}}
+					onPrev={() => {
+						if (idx < 0) return;
+						const prev = relatedSubmissions[(idx - 1 + relatedSubmissions.length) % relatedSubmissions.length];
+						setActiveSubmissionId(prev.id);
+					}}
+				/>
+			</div>
 		</main>
 	);
 }
