@@ -44,6 +44,14 @@ export interface SubmissionState {
 
 	/** Update a student’s ID. */
 	updateStudentId: (submissionId: string, id: string) => void;
+
+	/**
+	 * Merge a batch of submissions.
+	 * Matches existing submissions by `assignmentId` + `student.id`.
+	 * - If exists: updates score and merges selected comments.
+	 * - If new: adds it.
+	 */
+	mergeSubmissions: (submissions: Submission[]) => void;
 }
 
 /**
@@ -75,12 +83,12 @@ export const useSubmissionStore = create<SubmissionState>()(
 					submissions: state.submissions.map((s) =>
 						s.id === submissionId
 							? {
-									...s,
-									selected: {
-										...s.selected,
-										[questionId]: commentIds,
-									},
-								}
+								...s,
+								selected: {
+									...s.selected,
+									[questionId]: commentIds,
+								},
+							}
 							: s,
 					),
 				})),
@@ -129,6 +137,53 @@ export const useSubmissionStore = create<SubmissionState>()(
 						s.id === submissionId ? { ...s, student: { ...s.student, id } } : s,
 					),
 				})),
+
+			mergeSubmissions: (incoming) =>
+				set((state) => {
+					let nextSubmissions = [...state.submissions];
+
+					for (const inc of incoming) {
+						const index = nextSubmissions.findIndex(
+							(s) => s.assignmentId === inc.assignmentId && s.student.id === inc.student.id,
+						);
+
+						if (index !== -1) {
+							// Exists: Merge properties (e.g. score, selections)
+							// Strategy: Incoming 'selected' comments usually override or merge.
+							// Here we will merge the 'selected' maps: union of comment IDs for each question.
+							const existing = nextSubmissions[index];
+
+							const mergedSelected = { ...existing.selected };
+							for (const [qid, cids] of Object.entries(inc.selected)) {
+								const currentCids = mergedSelected[qid] ?? [];
+								// Union
+								mergedSelected[qid] = [...new Set([...currentCids, ...cids])];
+							}
+
+							nextSubmissions[index] = {
+								...existing,
+								score: inc.score, // Prefer incoming score (or could re-calc?)
+								selected: mergedSelected,
+								// if student name changed in import, update it?
+								student: { ...existing.student, name: inc.student.name || existing.student.name },
+							};
+						} else {
+							// New
+							// Ensure ID is unique (incoming SHOULD have ID, but better safe to keep it if valid or gen new if collision with OTHER assignment's submission - though UUIDs shouldn't collide)
+							// Actually, if we are importing, we might want to regenerate IDs to avoid collisions?
+							// But if we want to round-trip export/import, keeping IDs is nice.
+							// Let's keep incoming ID if not present in ENTIRE store.
+							const idExists = nextSubmissions.some((s) => s.id === inc.id);
+							const newSubmission = {
+								...inc,
+								id: idExists ? crypto.randomUUID() : inc.id,
+							};
+							nextSubmissions.push(newSubmission);
+						}
+					}
+
+					return { submissions: nextSubmissions };
+				}),
 		}),
 		{ name: 'scorebook.submissions' },
 	),

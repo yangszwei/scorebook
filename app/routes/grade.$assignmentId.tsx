@@ -36,8 +36,14 @@ export default function Grade() {
 		removeComment,
 	} = useAssignmentStore();
 
-	const { submissions, upsertSubmission, removeSubmission, updateSelectionForQuestion, updateScore } =
-		useSubmissionStore();
+	const {
+		submissions,
+		upsertSubmission,
+		removeSubmission,
+		updateSelectionForQuestion,
+		updateScore,
+		mergeSubmissions,
+	} = useSubmissionStore();
 
 	// Assignment (may be null)
 	const assignment = assignments.find((a) => a.id === assignmentId) ?? null;
@@ -139,6 +145,37 @@ export default function Grade() {
 											try {
 												const json = ev.target?.result as string;
 												const parsed = JSON.parse(json);
+
+												// New Format
+												if (parsed.type === 'scorebook-export' && parsed.assignment) {
+													const { assignment: newAssignment, submissions: newSubmissions } = parsed;
+													if (
+														confirm(
+															`匯入 "${newAssignment.title}" (含 ${newSubmissions?.length ?? 0} 筆評分)？\n這將合併現有資料。`,
+														)
+													) {
+														// 1. Update/Add Assignment
+														// Check if exists
+														const exists = assignments.some((a) => a.id === newAssignment.id);
+														if (exists) {
+															updateAssignment(newAssignment.id, newAssignment);
+														} else {
+															addAssignment(newAssignment);
+														}
+
+														// 2. Merge Submissions
+														if (Array.isArray(newSubmissions)) {
+															mergeSubmissions(newSubmissions);
+														}
+
+														if (!exists) {
+															navigate(`/grade/${newAssignment.id}`);
+														}
+													}
+													return;
+												}
+
+												// Legacy Format (Assignment Only)
 												if (parsed.id && parsed.title) {
 													if (confirm(`覆蓋 "${parsed.title}"？`)) {
 														updateAssignment(parsed.id, parsed);
@@ -159,7 +196,16 @@ export default function Grade() {
 
 							<button
 								onClick={() => {
-									const data = JSON.stringify(assignment, null, 2);
+									const data = JSON.stringify(
+										{
+											type: 'scorebook-export',
+											version: 1,
+											assignment,
+											submissions: relatedSubmissions,
+										},
+										null,
+										2,
+									);
 									const blob = new Blob([data], { type: 'application/json' });
 									const url = URL.createObjectURL(blob);
 									const a = document.createElement('a');
